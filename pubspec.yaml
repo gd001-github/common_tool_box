@@ -1,7 +1,7 @@
 name: common_tool_box
 description: dart常用的一些工具接口
-version: 0.0.1+1
-homepage: https://github.com/gd001-github/CustomCrop.git
+version: 0.0.1+5
+homepage: https://github.com/gd001-github/common_tool_box.git
 
 environment:
   sdk: ">=2.17.1 <3.0.0"
@@ -10,6 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
 
 dev_dependencies:
   flutter_test:
