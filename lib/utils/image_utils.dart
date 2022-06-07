@@ -11,4 +11,13 @@ class ImageUtils {
     final ui.FrameInfo fi = await codec.getNextFrame();
     return fi.image;
   }
+
+  ///图片旋转操作
+  static Uint8List rotate(Uint8List srcU8, num angle) {
+    final sImage = image_lib.decodeImage(srcU8);
+    final rotateImage = image_lib.copyRotate(sImage!, angle);
+    final newU8 = image_lib.writePng(rotateImage) as Uint8List;
+    return newU8;
+  }
+
 }
