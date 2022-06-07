@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 class Line extends StatelessWidget {
   final double width;
   final double height;
-  EdgeInsets? padding;
-  EdgeInsets? margin;
-  Color? color;
+  final EdgeInsets? padding;
+  final EdgeInsets? margin;
+  late final Color? color;
 
   Line(
       {Key? key,
