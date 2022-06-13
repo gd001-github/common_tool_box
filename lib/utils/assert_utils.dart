@@ -1,11 +1,11 @@
 import 'dart:ui' as ui;
 
+import 'package:common_tool_box/utils/image_utils.dart';
 import 'package:flutter/services.dart';
 
 class AssertUtils {
   AssertUtils._();
 
-  
   /// 读取assert里的文件， 返回图片类型数据
   static Future<ui.Image> readImage(String fileName) async {
     final ByteData data = await rootBundle.load(fileName);

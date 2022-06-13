@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:image/image.dart' as image_lib;
+
 class ImageUtils {
   ImageUtils._();
 
@@ -19,5 +21,4 @@ class ImageUtils {
     final newU8 = image_lib.writePng(rotateImage) as Uint8List;
     return newU8;
   }
-
 }
