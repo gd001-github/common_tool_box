@@ -22,13 +22,15 @@ class ImageUtils {
       ImageConfiguration config = ImageConfiguration.empty}) {
     final completer = Completer<ui.Image>();
 
-    ImageStream stream = provider.resolve(config);
+    final ImageStream stream = provider.resolve(config);
     late ImageStreamListener listener;
     listener = ImageStreamListener((info, synchronousCall) {
       final image = info.image;
       completer.complete(image);
       stream.removeListener(listener);
     });
+    stream.addListener(listener);
+    return completer.future;
   }
 
   ///图片旋转操作
