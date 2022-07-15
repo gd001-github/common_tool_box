@@ -69,7 +69,9 @@ class WatcherBuilder<T> extends StatefulWidget {
 
 class _WatcherBuilderState<T> extends State<WatcherBuilder<T>> {
   void onChanged() {
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
