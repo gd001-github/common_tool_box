@@ -1,126 +1,114 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
+import 'dart:isolate';
 
-/// 本地缓存服务
-class LocalStorage {
-  /// 默认用默认的storage
-  LocalStorage({this.storageName = defaultName}) {
-    // ignore: prefer_asserts_in_initializer_lists
-    assert(_preferences != null);
-    _keyList = _preferences!.getStringList(prefix) ?? [];
+import 'package:common_tool_box/extensions/template_extension.dart';
+import 'package:flutter/material.dart';
+
+class PortWrap {
+  ReceivePort? _receivePort;
+  ReceivePort get receivePort {
+    _receivePort ??= ReceivePort().let((it) {
+      _streamSubscription = it.asBroadcastStream().listen((event) {
+        listen?.call(event);
+      });
+    });
+    return _receivePort!;
   }
 
-  static SharedPreferences? _preferences;
+  StreamSubscription? _streamSubscription;
 
-  static const String defaultName = 'default';
+  void Function(Object data)? listen;
+}
 
-  final String storageName;
-
-  late final String prefix = '${storageName}_@@_';
-
-  var _keyList = <String>[];
-
-  String getFinalKey(String key) {
-    if (!_keyList.contains(key)) {
-      _keyList.add(key);
-      _preferences!.setStringList(prefix, _keyList);
-    }
-    return '$prefix$key';
+class Isolation {
+  Isolation() {
+    init();
   }
 
-  /// 初始化（app启动）
-  static Future<void> init() async {
-    _preferences ??= await SharedPreferences.getInstance();
+  final _msgPortWrap = PortWrap();
+  final _exitPortWrap = PortWrap();
+  final _errorPortWrap = PortWrap();
+
+  SendPort? newIsolateSendPort;
+
+  Isolate? _newIsolate;
+
+  Future<void> init() async {
+    _msgPortWrap.listen = _onNewIsolateMessage;
+    _newIsolate = await Isolate.spawn<SendPort>(
+        _entryPoint, _msgPortWrap.receivePort.sendPort,
+        onExit: _exitPortWrap.receivePort.sendPort,
+        onError: _errorPortWrap.receivePort.sendPort,
+        debugName: 'newIsolate');
   }
 
-  Future<bool> _setData<T>(String key, T value) {
-    assert(_preferences != null);
-    final finalKey = getFinalKey(key);
-    switch (T) {
-      case String:
-        return _preferences!.setString(finalKey, value as String);
-      case int:
-        return _preferences!.setInt(finalKey, value as int);
-      case bool:
-        return _preferences!.setBool(finalKey, value as bool);
-      case double:
-        return _preferences!.setDouble(finalKey, value as double);
-      case List:
-        return _preferences!.setStringList(finalKey, value as List<String>);
-      default:
-        throw Exception('LocalStorage-setData: invalid type');
-    }
+  static void _entryPoint(SendPort formerSendPort) {
+    NewIsolationSpace(formerSendPort);
   }
 
-  T? _getData<T>(String key) {
-    assert(_preferences != null);
-    final finalKey = getFinalKey(key);
-    switch (T) {
-      case String:
-        return _preferences?.getString(finalKey) as T?;
-      case int:
-        return _preferences?.getInt(finalKey) as T?;
-      case bool:
-        return _preferences?.getBool(finalKey) as T?;
-      case double:
-        return _preferences?.getDouble(finalKey) as T?;
-      case List:
-        return _preferences?.getStringList(finalKey) as T?;
-      default:
-        return _preferences?.get(finalKey) as T?;
-    }
-  }
-
-  /// 判断本地存储是否已存在 key
-  bool _containsKey(String key) {
-    assert(_preferences != null);
-    final finalKey = getFinalKey(key);
-    return _preferences!.containsKey(finalKey);
-  }
-
-  ///移除某个数据
-  Future<bool> _removeData(String key) {
-    assert(_preferences != null);
-    final finalKey = getFinalKey(key);
-    return _preferences!.remove(finalKey);
-  }
-
-  ///移除当前storage全部数据
-  Future<void> clearStorage() async {
-    assert(_preferences != null);
-    for (final e in _keyList) {
-      try {
-        await _removeData(e);
-      } catch (e) {
-        rethrow;
+  void _onNewIsolateMessage(Object msg) {
+    debugPrint('来自new对象的信息:${msg.toString()}');
+    if (msg is SendPort) {
+      newIsolateSendPort = msg;
+    } else if (msg is Map) {
+      if (msg.containsKey('error')) {
+        final message = msg['error'];
+        debugPrint(message);
       }
     }
-    await _preferences!.remove(prefix);
   }
 
-// ==================================
+  Future<dynamic> getResult(
+      Future<dynamic> Function(Object) callBack, Object params) {
+    final completer = Completer<dynamic>();
+    final portWrap = PortWrap();
+    portWrap.listen = completer.complete;
+    Future<dynamic> fun() {
+      return callBack.call(params);
+    }
 
-  /// 保存
-  Future<bool> setData<T>(String key, T value) async {
-    return _setData(key, value);
+    try {
+      newIsolateSendPort?.send({
+        'fun': fun,
+        'sendPort': portWrap.receivePort.sendPort,
+      });
+    } catch (e) {
+      completer.completeError(e);
+    }
+
+    return completer.future;
   }
 
-  /// 读取数据
-  T? getData<T>(String key) {
-    return _getData(key);
+  void closeIsolate() {
+    _newIsolate?.kill();
+  }
+}
+
+class NewIsolationSpace {
+  NewIsolationSpace(this.builderSendPort) {
+    _init();
   }
 
-  /// 判断本地存储是否已存在 key
-  bool containsKey(String key) {
-    return _containsKey(key);
+  final SendPort builderSendPort;
+
+  final _msgPortWrap = PortWrap();
+
+  void _init() {
+    _msgPortWrap.listen = _onBuilderMessage;
+    builderSendPort.send(_msgPortWrap.receivePort.sendPort);
   }
 
-  ///移除某个数据
-  Future<bool> removeData(String key) {
-    return _removeData(key);
-  }
-
-  ///移除全部数据
-  static Future<bool> clearAll() {
-    return _preferences!.clear();
+  void _onBuilderMessage(Object msg) {
+    try {
+      debugPrint('来自建造者信息:${msg.toString()}');
+      (msg as Map).go((map) async {
+        final sendPort = map['sendPort'] as SendPort;
+        final fun = map['fun'] as Future<dynamic> Function();
+        final ret = await fun.call();
+        sendPort.send(ret);
+      });
+    } catch (e) {
+      builderSendPort.send({'error': e.toString()});
+    }
   }
 }
