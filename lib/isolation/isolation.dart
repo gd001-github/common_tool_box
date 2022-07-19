@@ -50,11 +50,33 @@ class Isolation {
     debugPrint('来自new对象的信息:${msg.toString()}');
     if (msg is SendPort) {
       newIsolateSendPort = msg;
+    } else if (msg is Map) {
+      if (msg.containsKey('error')) {
+        final message = msg['error'];
+        debugPrint(message);
+      }
     }
   }
 
-  void fireMsg(Object msg) {
-    newIsolateSendPort?.send(msg);
+  Future<dynamic> getResult(
+      Future<dynamic> Function(Object) callBack, Object params) {
+    final completer = Completer<dynamic>();
+    final portWrap = PortWrap();
+    portWrap.listen = completer.complete;
+    Future<dynamic> fun() {
+      return callBack.call(params);
+    }
+
+    try {
+      newIsolateSendPort?.send({
+        'fun': fun,
+        'sendPort': portWrap.receivePort.sendPort,
+      });
+    } catch (e) {
+      completer.completeError(e);
+    }
+
+    return completer.future;
   }
 
   void closeIsolate() {
@@ -77,15 +99,16 @@ class NewIsolationSpace {
   }
 
   void _onBuilderMessage(Object msg) {
-    debugPrint('来自建造者信息:${msg.toString()}');
-    if (msg is Map) {
-      if (msg['fun'] is Function()) {
-        final ret = msg['fun'].call();
-        builderSendPort.send(ret);
-      } else if (msg['fun'] is Function(Object)) {
-        final ret = msg['fun'].call(msg['param']);
-        builderSendPort.send(ret);
-      }
+    try {
+      debugPrint('来自建造者信息:${msg.toString()}');
+      (msg as Map).go((map) async {
+        final sendPort = map['sendPort'] as SendPort;
+        final fun = map['fun'] as Future<dynamic> Function();
+        final ret = await fun.call();
+        sendPort.send(ret);
+      });
+    } catch (e) {
+      builderSendPort.send({'error': e.toString()});
     }
   }
 }
